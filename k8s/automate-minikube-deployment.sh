@@ -15,7 +15,7 @@ if ! minikube status &> /dev/null; then
   exit 1
 fi
 # Set variables
-GHCR_USER=nlinh2911
+GHCR_USER=mbjethwa
 IMAGE_TAG=latest
 K8S_DIR=./k8s
 IMAGES=("auth-service" "auth-db")
