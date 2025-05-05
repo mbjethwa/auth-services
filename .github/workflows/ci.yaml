@@ -1,0 +1,89 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ✅ Run each test file individually using a matrix strategy
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test_file: # List of test files to run
+          - tests/test_endpoints_auth.py
+          - tests/test_endpoints_permissions.py
+          - tests/test_endpoints_roles.py
+          - tests/test_endpoints_users.py  
+          - tests/test_rbac.py
+          - tests/test_security.py
+          - tests/test_user_service.py
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      # ✅ Cache installed pip packages
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      # Install dev ependencies for tests
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run ${{ matrix.test_file }}
+        env:
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        run: pytest ${{ matrix.test_file }}
+
+  # ✅ Build docker image only if all test jobs succeed
+  build:
+    runs-on: ubuntu-latest
+    needs: test  # Wait until all test jobs pass
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+      # ✅ Set lowercase GitHub repository name
+      # This is necessary because Docker image names are case-sensitive
+      # and GitHub repository names are case-insensitive.
+      - name: Set lowercase GitHub repository name
+        run: |
+          echo "REPO_LOWERCASE=$(echo 'ghcr.io/${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and tag Docker image for auth-service API
+        run: |
+          docker build -f Dockerfile.api -t $REPO_LOWERCASE/auth-service:latest .
+          docker tag $REPO_LOWERCASE/auth-service:latest $REPO_LOWERCASE/auth-service:${{ github.sha }}
+
+      - name: Build and tag Docker image for auth-service DB
+        run: |
+          docker build -f Dockerfile.db -t $REPO_LOWERCASE/auth-db:latest .
+          docker tag $REPO_LOWERCASE/auth-db:latest $REPO_LOWERCASE/auth-db:${{ github.sha }}
+
+      - name: Push Docker image
+        run: |
+          docker push $REPO_LOWERCASE/auth-service:latest
+          docker push $REPO_LOWERCASE/auth-service:${{ github.sha }}
+          docker push $REPO_LOWERCASE/auth-db:latest
+          docker push $REPO_LOWERCASE/auth-db:${{ github.sha }}

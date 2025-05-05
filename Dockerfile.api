@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+
+# use multi-stage builds to separate dependency installation and application runtime, reducing the final image size.
+ARG PYTHON_VERSION=3.13.0
+
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+# Prevents Python from writing pyc files.
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Keeps Python from buffering stdout and stderr to avoid situations where
+# the application crashes without emitting any logs due to buffering.
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    python -m pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Final runtime image
+FROM python:${PYTHON_VERSION}-slim AS runtime
+
+WORKDIR /app
+
+# Copy installed dependencies from the builder stage to the runtime stage
+COPY --from=builder /install /usr/local 
+
+# Create a non-privileged user that the app will run under.
+# See https://docs.docker.com/go/dockerfile-user-best-practices/
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
+
+# Switch to the non-privileged user to run the application.
+USER appuser
+
+# Copy the source code into the container.
+COPY . .
+
+# Expose the port that the application listens on.
+EXPOSE 8000
+
+# # Run the application.
+# CMD python3 -m uvicorn app.main:app --host=0.0.0.0 --port=8000 --reload
+# Make sure the default command runs Alembic migrations followed by the server
+
+# CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+# RUN chmod +x ./app/start.sh
+CMD ["sh", "./app/start.sh"]

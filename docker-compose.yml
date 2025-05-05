@@ -1,0 +1,61 @@
+services:
+  auth-service:
+    build:
+      context: . # Build context for the auth-service: dockerfile and dockert-compose file are in the same directory
+      dockerfile: Dockerfile.api # Name of the FastAPI Dockerfile
+    container_name: auth-service
+    ports:
+      - 8001:8000 # Maps port 8001 on the host to port 8000 in the container
+    restart: always # Always restart the container unless stopped manually
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    env_file:
+      - .env # Load environment variables from .env file
+    networks:
+      - stox_shared_network # Assigns this service to the shared network
+      - private # Assigns this service to the shared network
+    depends_on:
+      auth-db:
+        condition: service_healthy
+  auth-db:
+    build:
+      context: .                   # Path to the current directory
+      dockerfile: Dockerfile.db # Name of the PostgreSQL Dockerfile
+    restart: always
+    container_name: auth-db
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST} # Sets the PostgreSQL host/server
+      POSTGRES_PORT: ${POSTGRES_PORT} # Sets the PostgreSQL port
+      POSTGRES_DB: ${POSTGRES_DB} # Sets the PostgreSQL database name
+      POSTGRES_USER: ${POSTGRES_USER} # Sets the PostgreSQL username
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Sets the PostgreSQL password
+    env_file:
+      - .env # Load environment variables from .env file
+    expose:
+      - "5432" # Expose PostgreSQL port to other services in the same network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h ${POSTGRES_HOST} -p ${POSTGRES_PORT}" ] # Specify user and db otherwise might got error that it attempts to use non-existing root user
+      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data # Mounts volume for data persistence
+    networks:
+      - private # Assigns this service to the shared network
+volumes:
+  # Defines named volumes to persist data
+  auth_db_data: # Name of the volume for PostgreSQL data
+networks:
+  # Defines the Docker network for communication
+  stox_shared_network: # shared network so that all services can communicate with each other
+    external: true
+    name: stox_shared_network
+  private:
+    # Name of the custom network for the services
+    driver: bridge # Uses the default bridge network driver

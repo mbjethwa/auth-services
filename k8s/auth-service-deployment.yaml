@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: stox
+  labels:
+    app: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      serviceAccountName: auth-service-account
+      containers:
+      - name: auth-service
+        image: auth-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        env:
+        - name: PROJECT_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: PROJECT_NAME
+        - name: PROJECT_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: PROJECT_VERSION
+        - name: PROJECT_DESCRIPTION
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: PROJECT_DESCRIPTION
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: JWT_SECRET_KEY
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: POSTGRES_DB
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: POSTGRES_PORT
+        - name: AUTH_SERVICE_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: AUTH_SERVICE_BASE_URL
+        - name: INVENTORY_SERVICE_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: INVENTORY_SERVICE_BASE_URL
+        - name: ORDER_SERVICE_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auth-config
+              key: ORDER_SERVICE_BASE_URL
+        livenessProbe:
+          httpGet:
+            path: /docs
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /docs
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 60
