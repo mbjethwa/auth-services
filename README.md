@@ -2,7 +2,7 @@
 
 This document provides instructions for building and running the Auth Service application locally or using Docker.
 
---------------------------------
+-----
 
 ## FULLY LOCAL: Building and Running the Application Locally
 
